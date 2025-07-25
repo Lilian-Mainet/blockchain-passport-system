@@ -45,3 +45,64 @@
     { passport-id: (string-utf8 20) }
     { exists: bool }
 )
+
+;; === Read-Only Functions ===
+
+(define-read-only (get-passport (passport-id (string-utf8 20)))
+    (map-get? Passports { passport-id: passport-id })
+)
+
+(define-read-only (get-holder-passport (holder principal))
+    (map-get? HolderPassports { holder: holder })
+)
+
+(define-read-only (is-valid-passport? (passport-id (string-utf8 20)))
+    (match (map-get? Passports { passport-id: passport-id })
+        passport (if (is-eq (get status passport) u"active")
+            true
+            false
+        )
+        false
+    )
+)
+
+(define-read-only (is-authority (addr principal))
+    (match (map-get? PassportAuthorities { authority: addr })
+        auth (get active auth)
+        false
+    )
+)
+;; === Authority Management ===
+
+(define-public (add-authority
+        (authority principal)
+        (authority-name (string-utf8 100))
+    )
+    (begin
+        (if (is-eq tx-sender contract-owner)
+            (begin
+                (map-set PassportAuthorities { authority: authority } {
+                    active: true,
+                    name: authority-name,
+                })
+                (ok true)
+            )
+            err-unauthorized
+        )
+    )
+)
+
+(define-public (remove-authority (authority principal))
+    (begin
+        (if (is-eq tx-sender contract-owner)
+            (begin
+                (map-set PassportAuthorities { authority: authority } {
+                    active: false,
+                    name: u"Revoked",
+                })
+                (ok true)
+            )
+            err-unauthorized
+        )
+    )
+)
