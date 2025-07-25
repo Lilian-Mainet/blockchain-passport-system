@@ -106,3 +106,99 @@
         )
     )
 )
+
+(define-public (issue-passport (params {
+    passport-id: (string-utf8 20),
+    holder: principal,
+    metadata: (string-utf8 500),
+    expiry-date: uint,
+}))
+    (let (
+            (passport-id (get passport-id params))
+            (holder (get holder params))
+            (metadata (get metadata params))
+            (expiry-date (get expiry-date params))
+        )
+        (begin
+            (if (not (is-authority tx-sender))
+                err-unauthorized
+                (if (is-some (map-get? PassportNumbers { passport-id: passport-id }))
+                    err-already-exists
+                    (if (is-some (map-get? HolderPassports { holder: holder }))
+                        err-already-exists
+                        (begin
+                            (map-set Passports { passport-id: passport-id } {
+                                holder: holder,
+                                issue-date: stacks-block-height,
+                                expiry-date: expiry-date,
+                                metadata: metadata,
+                                issuer: tx-sender,
+                                status: u"active",
+                            })
+                            (map-set HolderPassports { holder: holder } { passport-id: passport-id })
+                            (map-set PassportNumbers { passport-id: passport-id } { exists: true })
+                            (ok passport-id)
+                        )
+                    )
+                )
+            )
+        )
+    )
+)
+
+(define-public (revoke-passport (passport-id (string-utf8 20)))
+    (begin
+        (match (map-get? Passports { passport-id: passport-id })
+            passport (if (not (is-eq (get issuer passport) tx-sender))
+                err-unauthorized
+                (begin
+                    (map-set Passports { passport-id: passport-id }
+                        (merge passport { status: u"revoked" })
+                    )
+                    (ok true)
+                )
+            )
+            err-not-found
+        )
+    )
+)
+
+(define-public (update-passport-metadata
+        (passport-id (string-utf8 20))
+        (new-meta (string-utf8 500))
+    )
+    (begin
+        (match (map-get? Passports { passport-id: passport-id })
+            passport (if (not (is-eq (get issuer passport) tx-sender))
+                err-unauthorized
+                (begin
+                    (map-set Passports { passport-id: passport-id }
+                        (merge passport { metadata: new-meta })
+                    )
+                    (ok true)
+                )
+            )
+            err-not-found
+        )
+    )
+)
+
+(define-public (extend-passport-validity
+        (passport-id (string-utf8 20))
+        (new-expiry uint)
+    )
+    (begin
+        (match (map-get? Passports { passport-id: passport-id })
+            passport (if (not (is-eq (get issuer passport) tx-sender))
+                err-unauthorized
+                (begin
+                    (map-set Passports { passport-id: passport-id }
+                        (merge passport { expiry-date: new-expiry })
+                    )
+                    (ok true)
+                )
+            )
+            err-not-found
+        )
+    )
+)
